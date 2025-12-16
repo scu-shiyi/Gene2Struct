@@ -1,0 +1,27 @@
+name: genestruct
+channels:
+  - bioconda
+  - conda-forge
+
+dependencies:
+  - python=3.12
+  - iqtree
+  - trimal
+  - muscle
+  - pal2nal
+  - fpocket
+  - autodock-vina
+  - openbabel
+  - paml
+  - pip
+  - pip:
+      - --index-url https://pypi.tuna.tsinghua.edu.cn/simple
+      - biopython
+      - matplotlib
+      - seaborn
+      - pandas
+      - numpy
+      - requests
+      - psutil
+      - ete3
+      - scipy
