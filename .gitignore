@@ -205,4 +205,17 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+# macOS
 .DS_Store
+
+# IDE
+.idea/
+*.iml
+
+# Large binary / vendor tools
+*.tar.gz
+*.zip
+
+# Python cache
+__pycache__/
+*.pyc

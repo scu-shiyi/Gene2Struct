@@ -10,6 +10,7 @@ setup(
     author_email="shi@stu.scu.edu.cn",
     url="https://github.com/Shishi/gene2struct",  
     packages=find_packages(include=["scripts", "scripts.*"]),
+    package_data={"scripts": ["utils/*.ttf"]},
     python_requires='>=3.8',
     install_requires=[
         "biopython",
@@ -23,7 +24,7 @@ setup(
         "requests"],
     entry_points={
         'console_scripts': [
-            'phyloselect = phyloselect.cli:main',
+            'phyloselect = scripts.cli:main',
         ]
     },
     include_package_data=True,
