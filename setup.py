@@ -4,11 +4,11 @@ import os
 
 setup(
     name="phyloselect",
-    version="1.1.0",
+    version="1.1.1",
     description="PhyloSelect: A comprehensive toolkit for phylogenetic analysis and evolutionary selection.",
     author="Shishi",
     author_email="shi@stu.scu.edu.cn",
-    url="https://github.com/Shishi/gene2struct",  
+    url="https://github.com/scu-shiyi/PhyloSelect",
     packages=find_packages(include=["scripts", "scripts.*"]),
     package_data={"scripts": ["utils/*.ttf"]},
     python_requires='>=3.8',
