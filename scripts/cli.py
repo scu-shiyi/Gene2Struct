@@ -1,197 +1,11 @@
 import argparse
 import os
 import tarfile
-from scripts.evolution.core import RunSite, RunBranch
-from scripts.seq_mining.core import run as run_geneminer
-from scripts.docking.core import run as run_docking
 import shutil
 import subprocess
 import shlex
 import zlib
 from urllib.parse import urljoin
-
-# # ===== MGLTools Constants and Configuration =====
-# MGL_URL_BASE = os.environ.get("MGL_URL_BASE", "https://ccsb.scripps.edu/download/532/")
-# if not MGL_URL_BASE.endswith('/'):
-#     MGL_URL_BASE += '/'
-# MGL_ARCHIVE = os.environ.get("MGL_ARCHIVE_NAME", "mgltools_x86_64Linux2.1.5.7.tar.gz")
-# MGL_DIR_NAME = "mgltools_x86_64Linux2_1.5.7"
-# MGL_SENTINEL_FILE = ".install_complete"
-#
-# # ===== Helper Functions (as refined in our discussions) =====
-#
-# def _is_gzip_magic(path: str) -> bool:
-#     """Checks if a file has a valid gzip header."""
-#     try:
-#         with open(path, "rb") as fh:
-#             return fh.read(2) == b"\x1f\x8b"
-#     except OSError:
-#         return False
-#
-# def _archive_is_complete(archive_path: str) -> bool:
-#     """Checks if the archive is a complete and valid tar.gz file."""
-#     if not os.path.isfile(archive_path) or not _is_gzip_magic(archive_path):
-#         return False
-#     try:
-#         with tarfile.open(archive_path, "r:gz") as tar:
-#             names = set(tar.getnames())
-#             req_dir = f"{MGL_DIR_NAME}/"
-#             # Now, we only check for the MGLToolsPckgs.tar.gz sub-archive.
-#             req_file = f"{MGL_DIR_NAME}/MGLToolsPckgs.tar.gz"
-#             return any(n.startswith(req_dir) for n in names) and req_file in names
-#     except (tarfile.ReadError, OSError, EOFError, zlib.error):
-#         return False
-#
-# def _safe_extract(tar: tarfile.TarFile, path: str):
-#     """Safely extracts a tar archive, preventing path traversal."""
-#     base = os.path.realpath(path)
-#     for member in tar.getmembers():
-#         target = os.path.realpath(os.path.join(path, member.name))
-#         if not target.startswith(base + os.sep):
-#             raise RuntimeError(f"Unsafe path in tar: {member.name}")
-#     tar.extractall(path=path)
-#
-# def _extract_archive(archive_path: str, utils_dir: str):
-#     print("Extracting MGLTools …")
-#     with tarfile.open(archive_path, "r:gz") as tar:
-#         _safe_extract(tar, utils_dir)
-#
-#     print("Extracting MGLTools sub-archives...")
-#     # Get the extracted MGLTools root directory
-#     extracted_root = os.path.join(utils_dir, MGL_DIR_NAME)
-#
-#     # Extract the MGLToolsPckgs.tar.gz sub-archive
-#     pkg_tarball_path = os.path.join(extracted_root, "MGLToolsPckgs.tar.gz")
-#     if os.path.isfile(pkg_tarball_path):
-#         with tarfile.open(pkg_tarball_path) as tar:
-#             _safe_extract(tar, extracted_root)
-#         os.remove(pkg_tarball_path) # Clean up the sub-archive
-#     else:
-#         raise FileNotFoundError(f"Sub-archive {pkg_tarball_path} not found.")
-# def _patch_prepare_ligand(target_dir: str):
-#     """Applies a patch to the prepare_ligand4.py script."""
-#     patch_path = os.path.join(target_dir, "MGLToolsPckgs", "AutoDockTools", "Utilities24", "prepare_ligand4.py")
-#     if not os.path.isfile(patch_path):
-#         # 如果文件不存在，引发异常让调用者处理
-#         raise FileNotFoundError(f"Patch target not found: {patch_path}")
-#     print(f"Patching {patch_path} …")
-#     with open(patch_path, "r", encoding="utf-8", errors="ignore") as f:
-#         lines = f.readlines()
-#     patched_lines = []
-#     for line in lines:
-#         s = line.strip()
-#         if s == "ligand_filename = os.path.basename(a)":
-#             patched_lines.append("# " + line if not line.lstrip().startswith("#") else line)
-#         elif s == "#ligand_filename = a":
-#             indentation = len(line) - len(line.lstrip())
-#             patched_lines.append(f"{' ' * indentation}ligand_filename = a\n")
-#         else:
-#             patched_lines.append(line)
-#     with open(patch_path, "w", encoding="utf-8") as f:
-#         f.writelines(patched_lines)
-#
-# def _download_fast(url: str, dest: str) -> bool:
-#     """Uses an external downloader to fetch the file."""
-#     prefer = os.environ.get("MGL_DOWNLOADER", "").lower()
-#     order = [prefer] if prefer in {"aria2c", "wget", "curl"} else ["wget", "aria2c", "curl"]
-#     extra = shlex.split(os.environ.get("MGL_DOWNLOADER_ARGS", ""))
-#     ipv4 = os.environ.get("MGL_IPV4") == "1"
-#
-#     for tool in order:
-#         if tool == "wget" and shutil.which("wget"):
-#             cmd = ["wget", "-c", "--tries=10", "--timeout=30", "-O", dest]
-#             if ipv4: cmd.insert(1, "-4")
-#             cmd += extra + [url]
-#         elif tool == "aria2c" and shutil.which("aria2c"):
-#             cmd = ["aria2c", "-x16", "-s16", "-k", "1M", "--continue=true", "-o", os.path.basename(dest), "--dir", os.path.dirname(dest), url]
-#             cmd += extra
-#         elif tool == "curl" and shutil.which("curl"):
-#             cmd = ["curl", "-L", "--retry", "10", "--retry-delay", "2", "-C", "-", "-o", dest, url]
-#             if ipv4: cmd.insert(1, "-4")
-#             cmd += extra
-#         else:
-#             continue
-#         try:
-#             print(f"Trying external downloader: {tool} …")
-#             subprocess.run(cmd, check=True)
-#             return True
-#         except Exception as e:
-#             print(f"[WARN] {tool} failed: {e}; fallback…")
-#             continue
-#     return False
-#
-# # ===== Main MGLTools Installation Logic =====
-#
-# def ensure_mgltools():
-#     """
-#     Checks for MGLTools directory, then archive, and downloads only if necessary.
-#     """
-#     base_dir = os.path.abspath(os.path.dirname(__file__))
-#     utils_dir = os.path.join(base_dir, "utils")
-#     target_dir = os.path.join(utils_dir, MGL_DIR_NAME)
-#     archive_path = os.path.join(utils_dir, MGL_ARCHIVE)
-#     sentinel_path = os.path.join(target_dir, MGL_SENTINEL_FILE)
-#
-#     # Make sure the base directory for utils exists
-#     os.makedirs(utils_dir, exist_ok=True)
-#     # 0
-#     if os.path.isfile(sentinel_path):
-#         return target_dir
-#     print("MGLTools installation check initiated.")
-#
-#     is_install = False
-#     # 1. Check if the directory is already installed and patched
-#     patch_target_path = os.path.join(target_dir, "MGLToolsPckgs", "AutoDockTools", "Utilities24", "prepare_ligand4.py")
-#     if os.path.isdir(target_dir) and os.path.isfile(patch_target_path):
-#         print("MGLTools already present, skipping download and extract.")
-#         try:
-#             _patch_prepare_ligand(target_dir)
-#             is_install = True
-#         except FileNotFoundError:
-#             print(f"[WARN] Incomplete MGLTools installation found during patching. Reinstalling.")
-#             shutil.rmtree(target_dir, ignore_errors=True)
-#         except Exception as e:
-#             print(f"[ERROR] An unexpected error occurred during patching: {e}. Reinstalling.")
-#             shutil.rmtree(target_dir, ignore_errors=True)
-#     if is_install:
-#         with open(sentinel_path, "w") as f:
-#             f.write("Installation complete.\n")
-#         return target_dir
-#
-#     # 2. Check if a local, complete archive exists and extract it
-#     if os.path.isfile(archive_path) and _archive_is_complete(archive_path):
-#         print("Found local, complete archive. Extracting...")
-#         try:
-#             _extract_archive(archive_path, utils_dir)
-#             print("MGLTools installed from local archive.")
-#             _patch_prepare_ligand(target_dir)
-#             with open(sentinel_path, "w") as f:
-#                 f.write("Installation complete.\n")
-#             return target_dir
-#         except (tarfile.ReadError, RuntimeError, FileNotFoundError) as e:
-#             print(f"[ERROR] Failed to extract local archive: {e}. Removing...")
-#             os.remove(archive_path)
-#
-#     # 3. If no directory and no complete archive, download the file
-#     print("MGLTools not found. Downloading...")
-#     # Prioritize the direct file link for downloaders like wget and curl
-#     url = urljoin(MGL_URL_BASE, MGL_ARCHIVE)
-#     if not _download_fast(url, archive_path):
-#         raise RuntimeError(
-#             "Download failed. Please check your network connection or try again later."
-#         )
-#
-#     # 4. After download, perform final checks and installation
-#     if not _archive_is_complete(archive_path):
-#         raise RuntimeError("Downloaded archive appears invalid or incomplete.")
-#
-#     _safe_extract(tarfile.open(archive_path, "r:gz"), utils_dir)
-#     print("MGLTools installed under utils.")
-#     _patch_prepare_ligand(target_dir)
-#     with open(sentinel_path, "w") as f:
-#         f.write("Installation complete.\n")
-#     return target_dir
-
 
 
 def main():
@@ -216,7 +30,7 @@ def main():
     parser_geneminer = subparsers.add_parser("geneminer", help="Extract phylogenetic marker genes(CDS) from genomic data for evolutionary studies.",
                                              formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_geneminer.add_argument('command',
-                        choices=('filter', 'assemble', 'consensus', 'trim', 'combine', 'tree',[]),
+                        choices=('filter', 'assemble', 'consensus', 'trim', 'combine', 'tree'),
                         help='One or several of the following actions, separated by space:' + COMMAND_HELP,
                         metavar='command',
                         nargs='*')
@@ -306,15 +120,22 @@ def main():
 
 
     args = parser.parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
 
     if args.command == "siteview":
+        os.makedirs(args.output_dir, exist_ok=True)
+        from scripts.evolution.core import RunSite
         RunSite(args)
     elif args.command == "selection":
+        os.makedirs(args.output_dir, exist_ok=True)
+        from scripts.evolution.core import RunBranch
         RunBranch(args)
     elif args.command == "docking":
+        os.makedirs(args.output_dir, exist_ok=True)
+        from scripts.docking.core import run as run_docking
         run_docking(args)
     elif args.command == "geneminer":
+        os.makedirs(args.output_dir, exist_ok=True)
+        from scripts.seq_mining.core import run as run_geneminer
         run_geneminer(args)
 
 if __name__ == "__main__":
