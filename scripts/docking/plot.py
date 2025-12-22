@@ -2,8 +2,6 @@ import re, os
 from pathlib import Path
 from matplotlib import font_manager as fm
 import pandas as pd
-# from pyparsing import pythonStyleComment
-# from scripts.DockingModule.AutoDocking import parse_mapping_csv
 import numpy as np
 from scripts.utils.font import times_new_roman
 import Bio.Phylo as Phylo
@@ -155,17 +153,21 @@ def calculate_indices(raw_df):
                 "Inhibition Difference (Substrate - Product)": inhibition_diff,
             })
     results_df = pd.DataFrame(results)
-    results_df.to_csv('/home/shiyi/Gene2Struct-main/准备删除/binding_energy_results.csv', index=False)
     standardize_df = min_max_normalize(results_df)
     cofactor_df = pd.DataFrame()
-    if is_cofactor:
+    col = 'Cofactor Binding Energy_Normalized'
+    if is_cofactor and col in standardize_df.columns:
         cofactor_df = standardize_df.pivot(index='Species', columns='Gene', values='Cofactor Binding Energy_Normalized')
+    else:
+        cofactor_df = pd.DataFrame()
     inhibition_diff_df = standardize_df.pivot(index='Species', columns='Gene', values='Inhibition Difference (Substrate - Product)_Normalized')
 
     return cofactor_df, inhibition_diff_df, is_cofactor
 
 
 def plot_single_figure(tree_path, df, title, out_path):
+    if df is None or df.empty or df.dropna().empty:
+        return
     fig = plt.figure(figsize=(16, 10), dpi=150)
     gs = GridSpec(1, 2, width_ratios=[1, 5], wspace=0.2)
     ax_tree = fig.add_subplot(gs[0])
